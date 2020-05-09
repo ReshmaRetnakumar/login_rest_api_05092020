@@ -1,0 +1,14 @@
+{
+  "db": {
+    "name": "db",
+    "connector": "memory"
+  },
+  "login_details": {
+    "host": "localhost",
+    "database": "login_details",
+    "password": "softinc",
+    "name": "login_details",
+    "user": "root",
+    "connector": "mysql"
+  }
+}
