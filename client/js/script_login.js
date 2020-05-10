@@ -76,25 +76,4 @@ $( "#username" ).change(function() {
      return false;
      }
 });
-
-// validate password
-// $( "#pass" ).change(function() {
-//   debugger;
-//   password = $("#pass").val();
-//   var letters = /^[A-Za-z]+$/;
-//    if(password.match(letters))
-//      {
-//       return true;
-//      }
-//    else
-//      {
-//      alert("Allow only characters!!!");
-//      return false;
-//      }
-// });
-
-
-// function add_new_user(){
-//   alert('oooooooooooo add_new_user')
-// }
 });

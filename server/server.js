@@ -15,6 +15,9 @@ const app = module.exports = loopback();
 
 
 var bodyParser = require('body-parser');
+const cookieParser = require("cookie-parser");
+app.use(cookieParser());
+
 // var session = require('express-session')
 
 

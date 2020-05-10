@@ -5,92 +5,109 @@
 
 'use strict';
 const passwordHash = require('password-hash');
+const MongoClient = require('mongodb').MongoClient;
+//Create a database named "mydb":
+const url = "mongodb://localhost:27017/login_info";
+const fs = require('fs');
+const jwt = require('jsonwebtoken');
+const secreteKey = process.env.SECRET_KEY;
+const privateKey = fs.readFileSync('./private.pem', 'utf8');    
+const jwtExpirySeconds = 300;
 
-module.exports = function(server) {
+module.exports = function (server) {
   const router = server.loopback.Router();
-  const dbConnector = server.dataSources.login_details;
   server.use(router);
   //Load Login page on initial request
   server.get('/', (req, res) => {
-    try{
+    try {
       if (req.session == null || req.session.username == null) {
         res.redirect('client/login.html');
       }
-    }catch(err){
+    } catch (err) {
       res.send('404 : Error while loding login page');
     }
-  
+
   });
   server.post(`/login`, (req, res) => {
-    const { 
+    const {
       email,
       password
     } = req.body;
-    const hashPassword =  passwordHash.generate(password);
-    const auth = passwordHash.verify(password, hashPassword);
-    if(auth){
-      dbConnector.connector.execute(`SELECT * FROM user where email_id = ? and password = ?;`, [email, password],function (err, get_user) {
-        if (err) {
-          console.log("Error while getting FIPS" + err);
-          res.send('error');
+    MongoClient.connect(url, function(err, db) {
+      if (err) throw err;
+      const dbObject = db.db("login_info");
+      const condition = { email_id: email, password : password }; 
+      dbObject.collection("user").find(condition).toArray(function(err, validateUser) {
+        if (err) throw err;
+        console.log(validateUser);
+        db.close();
+        if(validateUser.length == 0){
+          res.send({
+            status: 'errot',
+            details: 'Authentication failed'
+          });
         }else{
-          res.send('success');
+          res.cookie('token',validateUser[0].token, { maxAge: jwtExpirySeconds, httpOnly: true });
+          res.send({
+            status: 'success',
+            details: `Welcome ${username}!!!!`
+          })
         }
-      });
-    }else{
-      res.send('Authentification failed');
-    }
+ 
+      });  
+    });
   });
 
   server.post(`/add_user`, (req, res) => {
-    const { 
+    const {
+      username,
       password,
       email
     } = req.body;
-    const hashPassword =  passwordHash.generate(password);
-    let insertQuery = `INSERT INTO user (user_name, password, email_id) VALUES ('${username}','${hashPassword}','${email}');`;
-    dbConnector.connector.execute(insertQuery, function (err, addUser) {
-      if (err) {
-        console.log("Error while getting FIPS" + err);
-        res.send({
-          status: 'error',
-          details: err.sqlMessage
-        });
-      }else if(addUser.length == 0){
-        res.send({
-          status: 'error',
-          details: 'No user added'
-        });
-      }else{
-        res.send({
-          status: 'success',
-          details: `New user ${username} added successfully`
-        });
-      }
+    const uniqueId = `${username}_${password}`
+    const nowDate = new Date();
+    nowDate.setSeconds(nowDate.getSeconds() + jwtExpirySeconds);
+    const expireTime = `${nowDate.getHours()}:${nowDate.getMinutes()}:${nowDate.getSeconds()}`;
+    let token = jwt.sign({ "user_info": uniqueId }, secreteKey, { algorithm: 'HS256', expiresIn: jwtExpirySeconds });
+    MongoClient.connect(url, function (err, db) {
+      if (err) throw err;
+      const dbObject = db.db("login_info");   
+      var userObj = { user_name: username, password: password, email_id: email, token : token, token_expires_in: expireTime};
+      dbObject.collection("user").insertOne(userObj, function (err, addUser) {
+        if (err) throw err;
+        else if (addUser.insertedCount == 0) {
+          res.send({
+            status: 'error',
+            details: 'No user added'
+          });
+        }else {
+          res.send({
+            status: 'success',
+            details: `New user ${username} added successfully`
+          });
+        }
+        db.close();
+      });
     });
   });
 
   server.get(`/get_all_users`, (req, res) => {
-    let selectAllUsers  = `select user_name,password,email_id from user;`
-    dbConnector.connector.execute(selectAllUsers, (err, allUser) => {
-      if (err) {
-        console.log("Error while getting FIPS" + err);
-        res.send({
-          status: 'error',
-          details: err.sqlMessage
-        });
-      }else if(allUser.length == 0){
-        res.send({
-          status: 'error',
-          details: 'No user added'
-        });
-      }else{
-        const allUserList = JSON.stringify(allUser);
-        res.send({
-          status: 'success',
-          details: `${allUserList}`
-        });
-      }
-    });
-  })
+    MongoClient.connect(url, function(err, db) {
+      if (err) throw err;
+      const dbObject = db.db("login_info");   
+      dbObject.collection("user").find({}).toArray(function(err, allUser) {
+        if (err) throw err;
+        db.close();
+        console.log(allUser);
+        if(allUser.length ==0){
+          res.send({
+            status:'error',
+            details: 'No users'
+          })
+        }else{
+          res.send(allUser);
+        }
+      });
+  });
+});
 };
